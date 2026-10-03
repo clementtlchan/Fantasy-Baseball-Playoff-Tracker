@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playoff Fantasy</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+        <path d="M16 3 29 16 16 29 3 16Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+        <circle cx="16" cy="26" r="2.2" fill="currentColor"/>
+      </svg>
+      <div>
+        <h1>Playoff Fantasy</h1>
+        <p class="sub" id="season">MLB postseason</p>
+      </div>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite">Loading…</div>
+  </header>
+
+  <nav class="tabs" aria-label="Sections">
+    <a href="#standings" data-tab="standings">Standings</a>
+    <a href="#players" data-tab="players">Players</a>
+    <a href="#games" data-tab="games">Games</a>
+    <a href="#manage" data-tab="manage">Manage</a>
+  </nav>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <main>
+    <section id="tab-standings" class="panel" aria-label="Standings">
+      <div id="standings-list"></div>
+    </section>
+
+    <section id="tab-players" class="panel" aria-label="Players" hidden>
+      <div class="toolbar">
+        <label class="field grow">
+          <span class="label">Search players</span>
+          <input id="players-q" type="search" placeholder="Name" autocomplete="off">
+        </label>
+        <div class="chips" role="group" aria-label="Filter players">
+          <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" class="chip" data-filter="hitters" aria-pressed="false">Hitters</button>
+          <button type="button" class="chip" data-filter="pitchers" aria-pressed="false">Pitchers</button>
+          <button type="button" class="chip" data-filter="available" aria-pressed="false">Available</button>
+        </div>
+      </div>
+      <div id="players-table"></div>
+    </section>
+
+    <section id="tab-games" class="panel" aria-label="Games" hidden>
+      <div id="games-list"></div>
+    </section>
+
+    <section id="tab-manage" class="panel" aria-label="Manage teams" hidden>
+      <form id="admin-form" class="card form-row">
+        <label class="field grow">
+          <span class="label">Admin email</span>
+          <input id="admin-email" type="email" autocomplete="username" placeholder="you@example.com" required>
+        </label>
+        <label class="field grow">
+          <span class="label">Password</span>
+          <input id="admin-password" type="password" autocomplete="current-password" placeholder="Supabase password" required>
+        </label>
+        <button type="submit" class="btn">Sign in</button>
+        <button type="button" id="admin-signout" class="btn" hidden>Sign out</button>
+      </form>
+
+      <form id="create-team" class="card form-row">
+        <label class="field grow">
+          <span class="label">Team name</span>
+          <input id="new-team-name" type="text" maxlength="60" required placeholder="Bleacher Bums">
+        </label>
+        <label class="field grow">
+          <span class="label">Owner</span>
+          <input id="new-team-owner" type="text" maxlength="60" placeholder="Optional">
+        </label>
+        <button type="submit" class="btn primary">Create team</button>
+      </form>
+
+      <div id="manage-teams"></div>
+
+      <details class="card rules">
+        <summary>Scoring rules</summary>
+        <div id="manage-scoring" class="rules-grid"></div>
+        <p class="note">An intentional walk scores both Walk and Intentional walk. Edit <code>scoring.json</code> and restart to change values; every total recalculates.</p>
+      </details>
+    </section>
+  </main>
+</div>
+
+<dialog id="player-dialog" aria-labelledby="player-dialog-title">
+  <div id="player-dialog-body"></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="supabase-config.js"></script>
+<script src="supabase-client.js"></script>
+<script src="client-engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
