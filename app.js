@@ -71,7 +71,7 @@
     const banner = $('#banner');
     if (state.error) {
       banner.hidden = false;
-      banner.textContent = 'Having trouble reaching MLB. Showing the last saved stats.';
+      banner.textContent = `Data refresh failed: ${state.error}. Showing the last saved stats.`;
     } else {
       banner.hidden = true;
     }
@@ -247,8 +247,7 @@
     $('#admin-password').disabled = signedIn;
     $('#admin-form button[type=submit]').hidden = signedIn;
 
-    $('#admin-form').hidden = !state.adminRequired;
-    $('#admin-key').value = adminKey;
+    $('#admin-form').hidden = false;
     renderScoring();
     const el = $('#manage-teams');
     if (!state.teams.length) {
@@ -445,7 +444,8 @@
     } catch (err) {
       const banner = $('#banner');
       banner.hidden = false;
-      banner.textContent = "Can't reach the tracker. Retrying…";
+      console.error("Tracker refresh failed:", err);
+      banner.textContent = `Tracker error: ${err.message || "Unknown error"}. Retrying…`;
     }
     // Fast while games are live, slow otherwise.
     pollTimer = setTimeout(() => refresh(), state && state.live ? 15000 : 60000);
