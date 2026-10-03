@@ -120,7 +120,7 @@ h1 {
 @keyframes pulse { 50% { opacity: 0.25; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .status.live .dot { animation: none; }
+  .status.live .dot, .live-badge .dot { animation: none; }
 }
 
 /* ---------- tabs ---------- */
@@ -216,6 +216,21 @@ td:last-child, th:last-child { padding-right: 16px; }
 .link:hover { text-decoration-color: var(--accent); }
 
 .pos-tag { color: var(--muted); font-size: 0.78rem; margin-left: 6px; }
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  color: var(--live);
+  font: 600 0.78rem/1 var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.dlg h2 .live-badge { margin-left: 0; }
+.live-badge .dot { width: 7px; height: 7px; background: var(--live); animation: pulse 1.6s ease-in-out infinite; }
 
 tr.is-out td { color: var(--muted); }
 tr.is-out .link { color: var(--muted); }

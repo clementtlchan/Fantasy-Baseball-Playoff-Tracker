@@ -53,6 +53,9 @@
   const manage = { queries: {}, results: {}, confirmDelete: null, pending: false };
   let openPlayerId = null;
 
+  // Same pulsing red dot and wording as the header, shown when the player's team is playing right now.
+  const liveBadge = (p) => (p.live ? '<span class="live-badge"><span class="dot"></span>Live</span>' : '');
+
   // ---------- header ----------
 
   function renderHeader() {
@@ -81,7 +84,7 @@
 
   function playerRow(p) {
     return `<tr class="${p.eliminated ? 'is-out' : ''}">
-      <td><button type="button" class="link" data-action="open-player" data-id="${p.id}">${esc(p.name)}</button><span class="pos-tag">${esc(p.pos)}</span></td>
+      <td><button type="button" class="link" data-action="open-player" data-id="${p.id}">${esc(p.name)}</button><span class="pos-tag">${esc(p.pos)}</span>${liveBadge(p)}</td>
       <td>${esc(p.team) || '–'} ${p.team ? `<span class="tag ${p.eliminated ? 'out' : 'in'}">${p.eliminated ? 'OUT' : 'IN'}</span>` : ''}</td>
       <td class="num wide">${p.games}</td>
       <td class="num ${tone(p.today)}">${p.today ? signed(p.today) : '–'}</td>
@@ -147,7 +150,7 @@
       <tbody>${list
         .map(
           (p) => `<tr class="${p.eliminated ? 'is-out' : ''}">
-        <td><button type="button" class="link" data-action="open-player" data-id="${p.id}">${esc(p.name)}</button><span class="pos-tag">${esc(p.pos)}</span></td>
+        <td><button type="button" class="link" data-action="open-player" data-id="${p.id}">${esc(p.name)}</button><span class="pos-tag">${esc(p.pos)}</span>${liveBadge(p)}</td>
         <td>${esc(p.team) || '–'} ${p.team ? `<span class="tag ${p.eliminated ? 'out' : 'in'}">${p.eliminated ? 'OUT' : 'IN'}</span>` : ''}</td>
         <td class="wide">${esc(p.ownerTeam || '–')}</td>
         <td class="num ${tone(p.today)}">${p.today ? signed(p.today) : '–'}</td>
@@ -228,7 +231,7 @@
     if (!list.length) return '<p class="note">No players found.</p>';
     return `<ul class="results">${list
       .map(
-        (p) => `<li><span class="who">${esc(p.name)} <span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span></span>
+        (p) => `<li><span class="who">${esc(p.name)} <span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span>${liveBadge(p)}</span>
         ${
           p.ownerTeam
             ? `<span class="taken">On ${esc(p.ownerTeam)}</span>`
@@ -268,7 +271,7 @@
             t.players.length
               ? `<div class="table-card"><table><thead><tr><th>Player</th><th class="num">Total</th><th></th></tr></thead><tbody>${t.players
                   .map(
-                    (p) => `<tr><td>${esc(p.name)}<span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span></td><td class="num">${fmt(p.total)}</td>
+                    (p) => `<tr><td>${esc(p.name)}<span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span>${liveBadge(p)}</td><td class="num">${fmt(p.total)}</td>
                   <td class="num"><button type="button" class="btn small" data-action="remove-player" data-team="${esc(t.id)}" data-player="${p.id}" aria-label="Remove ${esc(p.name)}">Remove</button></td></tr>`,
                   )
                   .join('')}</tbody></table></div>`
@@ -369,7 +372,7 @@
     const games = [...p.games].reverse();
     return `<div class="dlg">
       <div class="dlg-head">
-        <h2 id="player-dialog-title">${esc(p.name)}</h2>
+        <h2 id="player-dialog-title">${esc(p.name)} ${liveBadge(p)}</h2>
         <div class="total">${fmt(p.total)}<small>points</small></div>
       </div>
       <p class="dlg-sub">${esc([p.pos, p.team].filter(Boolean).join(' · '))}${p.team ? ` · ${p.eliminated ? 'Team eliminated' : 'Team still playing'}` : ''} · Hitting ${fmt(p.hitting)} · Pitching ${fmt(p.pitching)}</p>
