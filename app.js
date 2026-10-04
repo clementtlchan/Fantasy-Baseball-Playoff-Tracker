@@ -50,7 +50,7 @@
   let state = null;
   let tab = 'standings';
   const open = new Set(); // expanded team ids on Standings
-  const players = { list: [], filter: 'all', seq: 0 };
+  const players = { list: [], filter: 'all', sort: 'total', dir: 'desc', seq: 0 };
   const manage = { queries: {}, results: {}, confirmDelete: null, pending: false };
   let openPlayerId = null;
 
@@ -146,12 +146,30 @@
   // ---------- players ----------
 
   function filteredPlayers() {
-    return players.list.filter((p) => {
-      if (players.filter === 'pitchers') return p.pos === 'P';
-      if (players.filter === 'hitters') return p.pos !== 'P';
-      if (players.filter === 'available') return !p.ownerTeam;
+    const filter = players.filter;
+    const out = players.list.filter((p) => {
+      const pos = String(p.pos || '').toUpperCase();
+      if (filter === 'available') return !p.ownerTeam;
+      if (filter === 'of') return ['OF','LF','CF','RF'].includes(pos);
+      if (filter !== 'all') return pos === filter.toUpperCase();
       return true;
     });
+    const dir = players.dir === 'asc' ? 1 : -1;
+    const text = (v) => String(v || '').toLowerCase();
+    return out.sort((x, y) => {
+      let cmp = 0;
+      if (players.sort === 'today' || players.sort === 'total') cmp = Number(x[players.sort] || 0) - Number(y[players.sort] || 0);
+      else if (players.sort === 'owner') cmp = text(x.ownerTeam).localeCompare(text(y.ownerTeam));
+      else if (players.sort === 'team') cmp = text(x.team).localeCompare(text(y.team));
+      else cmp = text(x.name).localeCompare(text(y.name));
+      return cmp * dir || text(x.name).localeCompare(text(y.name));
+    });
+  }
+
+  function sortHead(key, label, cls = '') {
+    const active = players.sort === key;
+    const arrow = active ? (players.dir === 'asc' ? ' ↑' : ' ↓') : '';
+    return `<th class="${cls}"><button type="button" class="sort-head" data-sort="${key}" aria-label="Sort by ${esc(label)}">${esc(label)}${arrow}</button></th>`;
   }
 
   function renderPlayersTable() {
@@ -162,7 +180,7 @@
       return;
     }
     el.innerHTML = `<div class="card table-card"><table>
-      <thead><tr><th>Player</th><th>Team</th><th class="wide">Owner</th><th class="num">Today</th><th class="num">Total</th></tr></thead>
+      <thead><tr>${sortHead('name','Player')}${sortHead('team','Team')}${sortHead('owner','Owner','wide')}${sortHead('today','Today','num')}${sortHead('total','Total','num')}</tr></thead>
       <tbody>${list
         .map(
           (p) => `<tr class="${p.eliminated ? 'is-out' : ''}">
@@ -489,8 +507,19 @@
   // ---------- events ----------
 
   document.addEventListener('click', (e) => {
-    const target = e.target.closest('[data-action], [data-filter]');
+    const target = e.target.closest('[data-action], [data-filter], [data-sort]');
     if (!target) return;
+
+    if (target.dataset.sort) {
+      const key = target.dataset.sort;
+      if (players.sort === key) players.dir = players.dir === 'asc' ? 'desc' : 'asc';
+      else {
+        players.sort = key;
+        players.dir = (key === 'today' || key === 'total') ? 'desc' : 'asc';
+      }
+      renderPlayersTable();
+      return;
+    }
 
     if (target.dataset.filter) {
       players.filter = target.dataset.filter;
