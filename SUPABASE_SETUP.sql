@@ -75,3 +75,6 @@ drop policy if exists "admins can update player eligibility" on public.player_el
 create policy "admins can update player eligibility" on public.player_eligibility for update to authenticated
 using (exists (select 1 from public.league_admins a where a.user_id=auth.uid()))
 with check (exists (select 1 from public.league_admins a where a.user_id=auth.uid()));
+
+alter table public.player_eligibility
+  add column if not exists source_version integer not null default 1;
