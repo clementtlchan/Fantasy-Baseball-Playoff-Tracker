@@ -113,6 +113,9 @@ h1 {
 }
 
 .status.live { color: var(--ink); border-color: var(--live); }
+.status.live[data-action="show-live-games"] { cursor: pointer; }
+.status.live[data-action="show-live-games"]:hover { background: var(--surface); }
+.status.live[data-action="show-live-games"]:focus-visible { outline: 2px solid var(--live); outline-offset: 2px; }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
 .status.live .dot { background: var(--live); animation: pulse 1.6s ease-in-out infinite; }
