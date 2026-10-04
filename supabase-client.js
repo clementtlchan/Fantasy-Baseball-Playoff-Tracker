@@ -117,6 +117,20 @@
     async getTeams() {
       return request('league_teams?select=id,name,owner,player_ids&order=created_at.asc');
     },
+    async getScoringSettings(season) {
+      const rows = await request(`scoring_settings?season=eq.${encodeURIComponent(season)}&select=season,batting,pitching,updated_at`);
+      return rows?.[0] || null;
+    },
+    async upsertScoringSettings(season, scoring) {
+      if (!api.isSignedIn()) return null;
+      const row = {season:Number(season), batting:scoring.batting, pitching:scoring.pitching};
+      const rows = await request('scoring_settings?on_conflict=season', {
+        method:'POST',
+        headers:{Prefer:'resolution=merge-duplicates,return=representation'},
+        body:JSON.stringify(row),
+      });
+      return rows?.[0] || null;
+    },
     async getGameRecords(season) {
       return request(`game_records?season=eq.${encodeURIComponent(season)}&select=game_pk,record,updated_at&order=game_pk.asc`);
     },
