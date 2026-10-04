@@ -4,8 +4,8 @@
   const MLB = 'https://statsapi.mlb.com/api';
   const ESPN = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb';
   const SEASON = new Date().getFullYear();
-  const ESPN_ELIGIBILITY_VERSION = 2;
-  const ESPN_SLOT_POS = {0:'C',1:'1B',2:'2B',3:'3B',4:'SS',5:'OF',8:'OF',9:'OF',10:'OF',11:'DH',14:'SP',15:'RP'};
+  const ESPN_ELIGIBILITY_VERSION = 3;
+  const ESPN_SLOT_POS = {0:'C',1:'1B',2:'2B',3:'3B',4:'SS',5:'OF',8:'OF',9:'OF',10:'OF',11:'DH',13:'SP',14:'RP'};
   const POS_ORDER = ['C','1B','2B','3B','SS','OF','DH','SP','RP'];
   const GAME_TYPES = 'F,D,L,W';
   const START = `${SEASON}-09-20`, END = `${SEASON}-11-20`;
@@ -59,8 +59,8 @@
       const rows=await window.SupabaseFantasy.getPlayerEligibility(SEASON);
       const map={};
       for(const row of rows||[]){
-        const id=Number(row.mlb_player_id), positions=orderedPositions(Array.isArray(row.positions)?row.positions:[]);
-        if(id&&positions.length) map[id]={positions,espnId:row.espn_player_id||null,name:row.player_name||''};
+        const id=Number(row.mlb_player_id), positions=orderedPositions(Array.isArray(row.positions)?row.positions:[]), sourceVersion=num(row.source_version);
+        if(id&&positions.length&&sourceVersion>=ESPN_ELIGIBILITY_VERSION) map[id]={positions,espnId:row.espn_player_id||null,name:row.player_name||'',sourceVersion};
       }
       db.playerEligibility=map;
     }catch(err){
@@ -121,7 +121,7 @@
       if(!match?.positions?.length) continue;
       const positions=orderedPositions(match.positions);
       db.playerEligibility[id]={positions,espnId:match.espnId||null,name:p.name};
-      rows.push({season:SEASON,mlb_player_id:id,player_name:p.name,espn_player_id:match.espnId||null,positions});
+      rows.push({season:SEASON,mlb_player_id:id,player_name:p.name,espn_player_id:match.espnId||null,positions,source_version:ESPN_ELIGIBILITY_VERSION});
     }
     if(window.SupabaseFantasy.isSignedIn()&&rows.length){
       for(let i=0;i<rows.length;i+=200){
