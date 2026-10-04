@@ -64,11 +64,26 @@
     const el = $('#status');
     el.classList.toggle('live', live > 0);
     if (live > 0) {
+      el.dataset.action = 'show-live-games';
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', `Show ${live} live ${live === 1 ? 'game' : 'games'}`);
+      el.title = 'Go to live games';
       el.innerHTML = `<span class="dot"></span>Live · ${live} ${live === 1 ? 'game' : 'games'}`;
     } else if (state.checkedAt) {
+      delete el.dataset.action;
+      el.removeAttribute('tabindex');
+      el.setAttribute('role', 'status');
+      el.removeAttribute('aria-label');
+      el.removeAttribute('title');
       const t = new Date(state.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
       el.innerHTML = `<span class="dot"></span>Checked ${esc(t)}`;
     } else {
+      delete el.dataset.action;
+      el.removeAttribute('tabindex');
+      el.setAttribute('role', 'status');
+      el.removeAttribute('aria-label');
+      el.removeAttribute('title');
       el.innerHTML = '<span class="dot"></span>Waiting for first check';
     }
     const banner = $('#banner');
@@ -231,7 +246,7 @@
     if (!list.length) return '<p class="note">No players found.</p>';
     return `<ul class="results">${list
       .map(
-        (p) => `<li><span class="who">${esc(p.name)} <span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span>${liveBadge(p)}</span>
+        (p) => `<li><span class="who">${esc(p.name)} <span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span></span>
         ${
           p.ownerTeam
             ? `<span class="taken">On ${esc(p.ownerTeam)}</span>`
@@ -271,7 +286,7 @@
             t.players.length
               ? `<div class="table-card"><table><thead><tr><th>Player</th><th class="num">Total</th><th></th></tr></thead><tbody>${t.players
                   .map(
-                    (p) => `<tr><td>${esc(p.name)}<span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span>${liveBadge(p)}</td><td class="num">${fmt(p.total)}</td>
+                    (p) => `<tr><td>${esc(p.name)}<span class="pos-tag">${esc(p.pos)} ${esc(p.team)}</span></td><td class="num">${fmt(p.total)}</td>
                   <td class="num"><button type="button" class="btn small" data-action="remove-player" data-team="${esc(t.id)}" data-player="${p.id}" aria-label="Remove ${esc(p.name)}">Remove</button></td></tr>`,
                   )
                   .join('')}</tbody></table></div>`
@@ -407,6 +422,18 @@
 
   // ---------- tabs & rendering ----------
 
+  function showLiveGames() {
+    if (!state?.games?.some((g) => g.state === 'Live')) return;
+    if (location.hash !== '#games') location.hash = '#games';
+    setTab('games');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const liveGame = $('#games-list .game.is-live');
+        if (liveGame) liveGame.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
   function setTab(name) {
     tab = ['standings', 'players', 'games', 'manage'].includes(name) ? name : 'standings';
     for (const a of $$('.tabs a')) {
@@ -473,6 +500,9 @@
 
     const { action, id, team, player } = target.dataset;
     switch (action) {
+      case 'show-live-games':
+        showLiveGames();
+        break;
       case 'toggle-team':
         if (open.has(id)) open.delete(id);
         else open.add(id);
@@ -519,6 +549,13 @@
         renderManage();
         break;
       default:
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target?.dataset?.action === 'show-live-games') {
+      e.preventDefault();
+      showLiveGames();
     }
   });
 
