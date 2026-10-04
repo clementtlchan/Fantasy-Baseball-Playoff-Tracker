@@ -31,7 +31,7 @@
     const h = {...headers(), ...(opts.headers || {})};
     const hadSession = Boolean(session?.access_token);
     if (hadSession) h.Authorization = `Bearer ${session.access_token}`;
-    const r = await fetch(`${cfg.url}/rest/v1/${path}`, {...opts, headers: h});
+    const r = await fetch(`${cfg.url}/rest/v1/${path}`, {...opts, headers: h, cache:'no-store'});
     const text = await r.text();
     let body = null;
     try { body = text ? JSON.parse(text) : null; } catch { body = text; }
@@ -116,6 +116,19 @@
     },
     async getTeams() {
       return request('league_teams?select=id,name,owner,player_ids&order=created_at.asc');
+    },
+    async getGameRecords(season) {
+      return request(`game_records?season=eq.${encodeURIComponent(season)}&select=game_pk,record,updated_at&order=game_pk.asc`);
+    },
+    async upsertGameRecord(record, season) {
+      if (!api.isSignedIn()) return null;
+      const row = {game_pk: Number(record.gamePk), season: Number(season), record};
+      const rows = await request('game_records?on_conflict=game_pk', {
+        method:'POST',
+        headers:{Prefer:'resolution=merge-duplicates,return=representation'},
+        body:JSON.stringify(row),
+      });
+      return rows?.[0] || null;
     },
     async createTeam(team) {
       const rows = await request('league_teams', {method:'POST', headers:{Prefer:'return=representation'}, body:JSON.stringify(team)});
