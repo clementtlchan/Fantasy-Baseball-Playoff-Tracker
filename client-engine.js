@@ -4,7 +4,7 @@
   const MLB = 'https://statsapi.mlb.com/api';
   const ESPN = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb';
   const SEASON = new Date().getFullYear();
-  const ESPN_ELIGIBILITY_TTL = 12*60*60*1000;
+  const ESPN_ELIGIBILITY_VERSION = 2;
   const ESPN_SLOT_POS = {0:'C',1:'1B',2:'2B',3:'3B',4:'SS',5:'OF',8:'OF',9:'OF',10:'OF',11:'DH',14:'SP',15:'RP'};
   const POS_ORDER = ['C','1B','2B','3B','SS','OF','DH','SP','RP'];
   const GAME_TYPES = 'F,D,L,W';
@@ -27,7 +27,7 @@
   if (!Array.isArray(db.teams)) db.teams=[];
   if (!db.records || typeof db.records!=='object') db.records={};
   if (!db.pool || typeof db.pool!=='object') db.pool={};
-  let schedule=[], eliminated=new Set(), teams={}, lastCheckedAt=null, lastError=null, version=1;
+  let schedule=[], eliminated=new Set(), teams={}, lastCheckedAt=null, lastError=null, version=1, eligibilityCloudChecked=false;
 
   function save(){ try { localStorage.setItem(STORAGE,JSON.stringify(db)); } catch(e){ throw new Error('Browser storage is full. Clear old tracker data and refresh.'); } }
   async function syncTeamsFromCloud(){ const rows=await window.SupabaseFantasy.getTeams(); db.teams=rows.map(r=>({id:r.id,name:r.name,owner:r.owner||'',playerIds:Array.isArray(r.player_ids)?r.player_ids.map(Number):[]})); db.version=(db.version||1)+1; save(); }
@@ -52,23 +52,83 @@
   async function getJson(url){ let last; for(let i=0;i<3;i++){ try { const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(`MLB API HTTP ${r.status}`); return await r.json(); } catch(e){ last=e; if(i<2) await sleep(400*(i+1)); } } throw last; }
   function normalizePos(pos){ const p=String(pos||'').toUpperCase(); return ['LF','CF','RF'].includes(p)?'OF':p; }
   function orderedPositions(list){ const set=new Set(list.filter(Boolean)); return POS_ORDER.filter(p=>set.has(p)); }
-  async function syncEspnEligibility(){
-    const cached=db.espnEligibility;
-    if(cached?.players && Date.now()-num(cached.fetchedAt)<ESPN_ELIGIBILITY_TTL) return;
+  async function syncEligibilityFromCloud(){
+    if(eligibilityCloudChecked) return;
+    eligibilityCloudChecked=true;
     try{
-      const url=`${ESPN}/seasons/${SEASON}/segments/0/leaguedefaults/1?scoringPeriodId=0&view=kona_player_info`;
-      const filter={players:{limit:2500,sortPercOwned:{sortPriority:1,sortAsc:false}}};
-      const r=await fetch(url,{cache:'no-store',headers:{'x-fantasy-filter':JSON.stringify(filter),Accept:'application/json'}});
-      if(!r.ok) throw new Error(`ESPN Fantasy HTTP ${r.status}`);
-      const data=await r.json(), map={};
+      const rows=await window.SupabaseFantasy.getPlayerEligibility(SEASON);
+      const map={};
+      for(const row of rows||[]){
+        const id=Number(row.mlb_player_id), positions=orderedPositions(Array.isArray(row.positions)?row.positions:[]);
+        if(id&&positions.length) map[id]={positions,espnId:row.espn_player_id||null,name:row.player_name||''};
+      }
+      db.playerEligibility=map;
+    }catch(err){
+      console.warn('Cloud player eligibility unavailable; using ESPN/MLB fallback.',err);
+      if(!db.playerEligibility||typeof db.playerEligibility!=='object') db.playerEligibility={};
+    }
+  }
+  async function getEspnEligibilitySnapshot(){
+    if(db.espnEligibility?.version===ESPN_ELIGIBILITY_VERSION&&db.espnEligibility?.playersByKey) return db.espnEligibility;
+    try{
+      const [teamsRes,playersRes]=await Promise.all([
+        fetch('https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams?limit=50',{cache:'no-store'}),
+        fetch(`${ESPN}/seasons/${SEASON}/segments/0/leaguedefaults/1?scoringPeriodId=0&view=kona_player_info`,{
+          cache:'no-store',
+          headers:{'x-fantasy-filter':JSON.stringify({players:{limit:2500,sortPercOwned:{sortPriority:1,sortAsc:false}}}),Accept:'application/json'}
+        })
+      ]);
+      if(!teamsRes.ok) throw new Error(`ESPN teams HTTP ${teamsRes.status}`);
+      if(!playersRes.ok) throw new Error(`ESPN Fantasy HTTP ${playersRes.status}`);
+      const teamsData=await teamsRes.json(), data=await playersRes.json(), proTeams={};
+      for(const item of teamsData?.sports?.[0]?.leagues?.[0]?.teams||[]){
+        const t=item.team||item;
+        if(t?.id&&t?.abbreviation) proTeams[String(t.id)]=String(t.abbreviation).toUpperCase();
+      }
+      const playersByKey={}, byName={};
       for(const entry of data.players||[]){
         const p=entry.player||entry.playerPoolEntry?.player||entry;
         if(!p?.fullName) continue;
         const positions=orderedPositions((p.eligibleSlots||[]).map(id=>ESPN_SLOT_POS[id]));
-        if(positions.length) map[fold(p.fullName)]={positions,espnId:p.id||entry.id||null};
+        if(!positions.length) continue;
+        const nameKey=fold(p.fullName), teamAbbr=proTeams[String(p.proTeamId)]||'', value={positions,espnId:p.id||entry.id||null};
+        if(teamAbbr) playersByKey[`${nameKey}|${teamAbbr}`]=value;
+        if(!byName[nameKey]) byName[nameKey]=[];
+        byName[nameKey].push(value);
       }
-      if(Object.keys(map).length) db.espnEligibility={fetchedAt:Date.now(),players:map};
-    }catch(err){ console.warn('ESPN eligibility unavailable; using MLB fallback positions.',err); }
+      const uniqueByName={};
+      for(const [name,values] of Object.entries(byName)) if(values.length===1) uniqueByName[name]=values[0];
+      db.espnEligibility={version:ESPN_ELIGIBILITY_VERSION,playersByKey,uniqueByName};
+      return db.espnEligibility;
+    }catch(err){
+      console.warn('ESPN eligibility unavailable; using MLB fallback positions.',err);
+      return null;
+    }
+  }
+  async function fillMissingEligibility(){
+    if(!db.playerEligibility||typeof db.playerEligibility!=='object') db.playerEligibility={};
+    const ids=[...new Set([...Object.keys(db.pool).map(Number),...db.teams.flatMap(t=>t.playerIds.map(Number))])].filter(Boolean);
+    const missing=ids.filter(id=>!db.playerEligibility[id]);
+    if(!missing.length) return;
+    const snapshot=await getEspnEligibilitySnapshot();
+    if(!snapshot) return;
+    const rows=[];
+    for(const id of missing){
+      const p=db.pool[id];
+      if(!p?.name) continue;
+      const teamAbbr=teamLabel(p.teamId), nameKey=fold(p.name);
+      const match=snapshot.playersByKey?.[`${nameKey}|${teamAbbr}`]||snapshot.uniqueByName?.[nameKey];
+      if(!match?.positions?.length) continue;
+      const positions=orderedPositions(match.positions);
+      db.playerEligibility[id]={positions,espnId:match.espnId||null,name:p.name};
+      rows.push({season:SEASON,mlb_player_id:id,player_name:p.name,espn_player_id:match.espnId||null,positions});
+    }
+    if(window.SupabaseFantasy.isSignedIn()&&rows.length){
+      for(let i=0;i<rows.length;i+=200){
+        try{ await window.SupabaseFantasy.upsertPlayerEligibility(rows.slice(i,i+200)); }
+        catch(err){ console.warn('Could not persist ESPN player eligibility to Supabase.',err); break; }
+      }
+    }
   }
   function normalizeTeam(side){ const t=side.team||{}; return {id:t.id,name:t.name,abbr:t.abbreviation||t.teamCode||(t.name?t.name.split(' ').pop().slice(0,3).toUpperCase():'?'),score:side.score,isWinner:side.isWinner}; }
   function normalizeGame(g){ const s=g.seriesStatus; return {gamePk:g.gamePk,date:g.officialDate||String(g.gameDate).slice(0,10),startTime:g.gameDate,gameType:g.gameType,series:g.seriesDescription,gameNumber:g.seriesGameNumber,gamesInSeries:g.gamesInSeries,state:g.status?.abstractGameState,detail:g.status?.detailedState,away:normalizeTeam(g.teams.away),home:normalizeTeam(g.teams.home),inning:g.linescore?.currentInningOrdinal,inningState:g.linescore?.inningState,seriesStatus:s?{isOver:Boolean(s.isOver),losingTeamId:s.losingTeam?.id,description:s.shortDescription||s.description}:null}; }
@@ -84,10 +144,10 @@
   function aggregate(){const m=new Map(), today=todayET();for(const rec of Object.values(db.records)){for(const p of Object.values(rec.players||{})){let a=m.get(p.id);if(!a)a={id:p.id,name:p.name,pos:p.pos,teamId:p.teamId,latest:'',total:0,hitting:0,pitching:0,today:0,games:[]};const bat=p.batting?{line:p.batting,...scoreLine(p.batting,SCORING.batting)}:null,pit=p.pitching?{line:p.pitching,...scoreLine(p.pitching,SCORING.pitching)}:null,gt=(bat?.total||0)+(pit?.total||0);a.games.push({gamePk:rec.gamePk,date:rec.date,startTime:rec.startTime,final:rec.final,oppId:p.oppId,total:round(gt),batting:bat,pitching:pit});a.hitting+=bat?.total||0;a.pitching+=pit?.total||0;a.total+=gt;if(rec.date===today)a.today+=gt;if((rec.startTime||'')>=a.latest){a.latest=rec.startTime||'';a.teamId=p.teamId;if(p.pos)a.pos=p.pos;}m.set(p.id,a);}}for(const a of m.values()){a.games.sort((x,y)=>String(x.startTime).localeCompare(String(y.startTime)));a.total=round(a.total);a.hitting=round(a.hitting);a.pitching=round(a.pitching);a.today=round(a.today);}return m;}
   function teamLabel(id){return teams[id]?.abbr||'';}
   const liveTeamIds=()=>new Set(schedule.filter(g=>g.state==='Live').flatMap(g=>[g.away.id,g.home.id]));
-  function playerView(id,agg){const a=agg.get(id),b=a||db.pool[id]||{id,name:`Player ${id}`},teamId=a?a.teamId:b.teamId,owned=db.teams.find(t=>t.playerIds.includes(Number(id)));const pitchingGames=a?.games?.filter(g=>g.pitching)||[],fallback=[];const started=pitchingGames.some(g=>num(g.pitching?.line?.GS)>0),relieved=pitchingGames.some(g=>num(g.pitching?.line?.GS)===0);if(started)fallback.push('SP');if(relieved)fallback.push('RP');const mlbPos=normalizePos(b.pos||'');if(mlbPos&&mlbPos!=='P')fallback.unshift(mlbPos);if(!fallback.length&&mlbPos==='P')fallback.push('RP');const espn=db.espnEligibility?.players?.[fold(b.name)]?.positions||[],positions=orderedPositions(espn.length?espn:fallback),displayPos=positions.join('/');return {id,name:b.name,pos:displayPos,positions,mlbPos:b.pos||'',teamId,team:teamLabel(teamId),ownerTeam:owned?(owned.owner||owned.name):'',fantasyTeam:owned?.name||'',eliminated:teamId!=null&&eliminated.has(teamId),live:teamId!=null&&liveTeamIds().has(teamId),total:a?.total||0,hitting:a?.hitting||0,pitching:a?.pitching||0,today:a?.today||0,games:a?.games.length||0};}
+  function playerView(id,agg){const a=agg.get(id),b=a||db.pool[id]||{id,name:`Player ${id}`},teamId=a?a.teamId:b.teamId,owned=db.teams.find(t=>t.playerIds.includes(Number(id)));const pitchingGames=a?.games?.filter(g=>g.pitching)||[],fallback=[];const started=pitchingGames.some(g=>num(g.pitching?.line?.GS)>0),relieved=pitchingGames.some(g=>num(g.pitching?.line?.GS)===0);if(started)fallback.push('SP');if(relieved)fallback.push('RP');const mlbPos=normalizePos(b.pos||'');if(mlbPos&&mlbPos!=='P')fallback.unshift(mlbPos);if(!fallback.length&&mlbPos==='P')fallback.push('RP');const stored=db.playerEligibility?.[Number(id)]?.positions||[],positions=orderedPositions(stored.length?stored:fallback),displayPos=positions.join('/');return {id,name:b.name,pos:displayPos,positions,mlbPos:b.pos||'',teamId,team:teamLabel(teamId),ownerTeam:owned?(owned.owner||owned.name):'',fantasyTeam:owned?.name||'',eliminated:teamId!=null&&eliminated.has(teamId),live:teamId!=null&&liveTeamIds().has(teamId),total:a?.total||0,hitting:a?.hitting||0,pitching:a?.pitching||0,today:a?.today||0,games:a?.games.length||0};}
   function state(){const agg=aggregate();const ts=db.teams.map(t=>{const players=t.playerIds.map(id=>playerView(id,agg)).sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name)),total=players.reduce((s,p)=>s+p.total,0),today=players.reduce((s,p)=>s+p.today,0);return {id:t.id,name:t.name,owner:t.owner,total:round(total),today:round(today),alive:players.filter(p=>!p.eliminated).length,players};}).sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));ts.forEach((t,i)=>t.rank=i&&ts[i-1].total===t.total?ts[i-1].rank:i+1);return {version:`${version}.${db.version||1}`,checkedAt:lastCheckedAt,error:lastError,live:schedule.some(g=>g.state==='Live'),today:todayET(),teams:ts,games:schedule.map(g=>({gamePk:g.gamePk,date:g.date,startTime:g.startTime,series:g.series,gameNumber:g.gameNumber,gamesInSeries:g.gamesInSeries,state:g.state,detail:g.detail,inning:g.inning,inningState:g.inningState,away:{abbr:g.away.abbr,name:g.away.name,score:g.away.score,out:eliminated.has(g.away.id)},home:{abbr:g.home.abbr,name:g.home.name,score:g.home.score,out:eliminated.has(g.home.id)}})),eliminated:[...eliminated].map(id=>teams[id]?.abbr).filter(Boolean),scoring:SCORING,season:SEASON,gameTypes:GAME_TYPES,adminRequired:true};}
   async function resolveMissing(){const need=[...new Set(db.teams.flatMap(t=>t.playerIds))].filter(id=>!db.pool[id]);for(let i=0;i<need.length;i+=50){const chunk=need.slice(i,i+50);try{const d=await getJson(`${MLB}/v1/people?personIds=${chunk.join(',')}&hydrate=currentTeam`);for(const p of d.people||[])db.pool[p.id]={id:p.id,name:p.fullName,pos:p.primaryPosition?.abbreviation,teamId:p.currentTeam?.id};}catch(e){}}}
-  async function refresh(){try{await syncTeamsFromCloud();await syncHistoryFromCloud();schedule=await getSchedule();teams={};for(const g of schedule)for(const s of [g.away,g.home])teams[s.id]={id:s.id,name:s.name,abbr:s.abbr};eliminated=computeEliminated(schedule);const due=schedule.filter(g=>g.state==='Live'||!db.records[g.gamePk]||(g.state==='Final'&&(!db.records[g.gamePk].final||num(db.records[g.gamePk].statVersion)!==RECORD_VERSION)));for(let i=0;i<due.length;i+=3){await Promise.all(due.slice(i,i+3).map(async g=>{try{const [box,pbp]=await Promise.all([getJson(`${MLB}/v1/game/${g.gamePk}/boxscore`),getJson(`${MLB}/v1/game/${g.gamePk}/playByPlay`).catch(()=>null)]);const record=Object.assign(buildRecord(g,box,pbp,g.state==='Final'&&!!pbp),{fetchedAt:Date.now()});db.records[g.gamePk]=record;if(record.final)await persistFinalRecord(record);}catch(e){lastError=`Game ${g.gamePk}: ${e.message}`;}}));}const ids=[...new Set(schedule.flatMap(g=>[g.away.id,g.home.id]))];for(const id of ids){try{const d=await getJson(`${MLB}/v1/teams/${id}/roster?rosterType=active&season=${SEASON}`);for(const r of d.roster||[])db.pool[r.person.id]={id:r.person.id,name:r.person.fullName,pos:r.position?.abbreviation,teamId:id};}catch(e){}}await resolveMissing();await syncEspnEligibility();if(window.SupabaseFantasy.isSignedIn()){for(const rec of Object.values(db.records))if(rec?.final)await persistFinalRecord(rec);}db.version=(db.version||1)+1;save();lastCheckedAt=new Date().toISOString();lastError=null;version++;return state();}catch(e){lastError=e.message;throw e;}}
+  async function refresh(){try{await syncTeamsFromCloud();await syncHistoryFromCloud();await syncEligibilityFromCloud();schedule=await getSchedule();teams={};for(const g of schedule)for(const s of [g.away,g.home])teams[s.id]={id:s.id,name:s.name,abbr:s.abbr};eliminated=computeEliminated(schedule);const due=schedule.filter(g=>g.state==='Live'||!db.records[g.gamePk]||(g.state==='Final'&&(!db.records[g.gamePk].final||num(db.records[g.gamePk].statVersion)!==RECORD_VERSION)));for(let i=0;i<due.length;i+=3){await Promise.all(due.slice(i,i+3).map(async g=>{try{const [box,pbp]=await Promise.all([getJson(`${MLB}/v1/game/${g.gamePk}/boxscore`),getJson(`${MLB}/v1/game/${g.gamePk}/playByPlay`).catch(()=>null)]);const record=Object.assign(buildRecord(g,box,pbp,g.state==='Final'&&!!pbp),{fetchedAt:Date.now()});db.records[g.gamePk]=record;if(record.final)await persistFinalRecord(record);}catch(e){lastError=`Game ${g.gamePk}: ${e.message}`;}}));}const ids=[...new Set(schedule.flatMap(g=>[g.away.id,g.home.id]))];for(const id of ids){try{const d=await getJson(`${MLB}/v1/teams/${id}/roster?rosterType=active&season=${SEASON}`);for(const r of d.roster||[])db.pool[r.person.id]={id:r.person.id,name:r.person.fullName,pos:r.position?.abbreviation,teamId:id};}catch(e){}}await resolveMissing();await fillMissingEligibility();if(window.SupabaseFantasy.isSignedIn()){for(const rec of Object.values(db.records))if(rec?.final)await persistFinalRecord(rec);}db.version=(db.version||1)+1;save();lastCheckedAt=new Date().toISOString();lastError=null;version++;return state();}catch(e){lastError=e.message;throw e;}}
   let refreshPending = null;
   function refreshShared(){
     if(!refreshPending) refreshPending=refresh().catch(e=>{console.error('Tracker data refresh failed:',e);}).finally(()=>{refreshPending=null;});
