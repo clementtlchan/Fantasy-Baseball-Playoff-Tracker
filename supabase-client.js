@@ -120,6 +120,17 @@
     async getGameRecords(season) {
       return request(`game_records?season=eq.${encodeURIComponent(season)}&select=game_pk,record,updated_at&order=game_pk.asc`);
     },
+    async getPlayerEligibility(season) {
+      return request(`player_eligibility?season=eq.${encodeURIComponent(season)}&select=mlb_player_id,player_name,espn_player_id,positions&order=mlb_player_id.asc`);
+    },
+    async upsertPlayerEligibility(rows) {
+      if (!api.isSignedIn() || !Array.isArray(rows) || !rows.length) return [];
+      return request('player_eligibility?on_conflict=season,mlb_player_id', {
+        method:'POST',
+        headers:{Prefer:'resolution=merge-duplicates,return=representation'},
+        body:JSON.stringify(rows),
+      });
+    },
     async upsertGameRecord(record, season) {
       if (!api.isSignedIn()) return null;
       const row = {game_pk: Number(record.gamePk), season: Number(season), record};
