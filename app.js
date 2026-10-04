@@ -244,7 +244,7 @@
     }
     const days = [...byDay.keys()].sort().reverse();
     el.innerHTML = days
-      .map((d) => `<div class="day"><h2>${esc(dayLabel(d))}${d === state.today ? ' · Today' : ''}</h2><div class="game-grid">${byDay.get(d).map(gameCard).join('')}</div></div>`)
+      .map((d) => `<div class="day" data-date="${esc(d)}"><h2>${esc(dayLabel(d))}${d === state.today ? ' · Today' : ''}</h2><div class="game-grid">${byDay.get(d).map(gameCard).join('')}</div></div>`)
       .join('');
   }
 
@@ -446,6 +446,21 @@
 
   // ---------- tabs & rendering ----------
 
+  function focusRelevantGameDay() {
+    if (!state?.games?.length) return;
+    const dates = [...new Set(state.games.map((g) => g.date).filter(Boolean))].sort();
+    const targetDate = dates.includes(state.today)
+      ? state.today
+      : dates.find((d) => d > state.today) || dates.at(-1);
+    if (!targetDate) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const day = `#games-list .day[data-date="${CSS.escape(targetDate)}"]`;
+        $(day)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
   function showLiveGames() {
     if (!state?.games?.some((g) => g.state === 'Live')) return;
     if (location.hash !== '#games') location.hash = '#games';
@@ -467,6 +482,7 @@
     for (const panel of $$('.panel')) panel.hidden = panel.id !== `tab-${tab}`;
     if (!state) return;
     if (tab === 'players') loadPlayers();
+    if (tab === 'games') focusRelevantGameDay();
     if (tab === 'manage') renderManage();
   }
 
@@ -474,6 +490,7 @@
     renderHeader();
     renderStandings();
     renderGames();
+    if (tab === 'games') focusRelevantGameDay();
     if (tab === 'players') loadPlayers();
     renderManageSafely();
     if (openPlayerId && $('#player-dialog').open) openPlayer(openPlayerId);
