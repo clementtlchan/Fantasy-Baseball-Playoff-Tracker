@@ -251,13 +251,17 @@
   // ---------- manage ----------
 
   function renderScoring() {
-    const rows = (table, labels) =>
+    const signedIn = window.SupabaseFantasy.isSignedIn();
+    const rows = (kind, table, labels) =>
       Object.entries(table)
-        .map(([k, v]) => `<div class="row"><dt>${esc(labels[k] || k)}</dt><dd class="${tone(v)}">${signed(v)}</dd></div>`)
+        .map(([k, v]) => signedIn
+          ? `<div class="row scoring-edit-row"><dt><label for="score-${kind}-${k}">${esc(labels[k] || k)}</label></dt><dd><input id="score-${kind}-${k}" class="score-input" type="number" step="any" data-kind="${kind}" data-key="${k}" value="${esc(v)}"></dd></div>`
+          : `<div class="row"><dt>${esc(labels[k] || k)}</dt><dd class="${tone(v)}">${signed(v)}</dd></div>`)
         .join('');
     $('#manage-scoring').innerHTML = `
-      <div><h3>Hitters</h3><dl>${rows(state.scoring.batting, BAT_LABELS)}</dl></div>
-      <div><h3>Pitchers</h3><dl>${rows(state.scoring.pitching, PIT_LABELS)}</dl></div>`;
+      <div><h3>Hitters</h3><dl>${rows('batting', state.scoring.batting, BAT_LABELS)}</dl></div>
+      <div><h3>Pitchers</h3><dl>${rows('pitching', state.scoring.pitching, PIT_LABELS)}</dl></div>
+      ${signedIn ? '<div class="scoring-actions"><button type="button" class="btn primary" data-action="save-scoring">Save scoring</button></div>' : ''}`;
   }
 
   function resultsHtml(teamId) {
@@ -557,6 +561,19 @@
       case 'remove-player':
         mutate(() => api(`/api/teams/${encodeURIComponent(team)}/players/${player}`, { method: 'DELETE' }), 'Player removed.');
         break;
+      case 'save-scoring': {
+        const next = { batting: {}, pitching: {} };
+        for (const input of $('.score-input')) {
+          const value = Number(input.value);
+          if (!Number.isFinite(value)) { toast('Every scoring field must be a number.'); return; }
+          next[input.dataset.kind][input.dataset.key] = value;
+        }
+        mutate(
+          () => api('/api/scoring', { method: 'PATCH', body: JSON.stringify(next) }),
+          'Scoring settings saved.',
+        );
+        break;
+      }
       case 'save-team':
         mutate(
           () => api(`/api/teams/${encodeURIComponent(id)}`, {
