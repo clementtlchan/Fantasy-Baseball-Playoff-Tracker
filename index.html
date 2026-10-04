@@ -46,18 +46,12 @@
           <span class="label">Search players</span>
           <input id="players-q" type="search" placeholder="Name" autocomplete="off">
         </label>
-        <div class="chips" role="group" aria-label="Filter players by position">
-          <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" class="chip" data-filter="c" aria-pressed="false">C</button>
-          <button type="button" class="chip" data-filter="1b" aria-pressed="false">1B</button>
-          <button type="button" class="chip" data-filter="2b" aria-pressed="false">2B</button>
-          <button type="button" class="chip" data-filter="3b" aria-pressed="false">3B</button>
-          <button type="button" class="chip" data-filter="ss" aria-pressed="false">SS</button>
-          <button type="button" class="chip" data-filter="of" aria-pressed="false">OF</button>
-          <button type="button" class="chip" data-filter="dh" aria-pressed="false">DH</button>
+        <div class="chips" role="group" aria-label="Filter players">
+          <button type="button" class="chip" data-filter="all" aria-pressed="true">All Players</button>
+          <button type="button" class="chip" data-filter="available" aria-pressed="false">All Available</button>
+          <button type="button" class="chip" data-filter="batters" aria-pressed="false">Batters</button>
           <button type="button" class="chip" data-filter="sp" aria-pressed="false">SP</button>
           <button type="button" class="chip" data-filter="rp" aria-pressed="false">RP</button>
-          <button type="button" class="chip" data-filter="available" aria-pressed="false">Available</button>
         </div>
       </div>
       <div id="players-table"></div>
