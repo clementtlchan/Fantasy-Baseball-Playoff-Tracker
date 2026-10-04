@@ -8,8 +8,8 @@
   const STORAGE = `playoff-fantasy:${SEASON}`;
   const RECORD_VERSION = 2;
   const SCORING = {
-    batting:{H:.5,'1B':1,'2B':2,'3B':3,HR:4,R:2,RBI:2,BB:1,IBB:1,SO:-.25,HBP:1,SF:1,SH:1,GIDP:-.5,SB:2,CS:-1,GS:1,GWRBI:1},
-    pitching:{GS:0,QS:15,W:5,L:-5,SV:5,HLD:3,BS:-3,IP:3,ER:-.5,BB:-.5,IBB:-.5,HBP:-.5,BK:-.5,SO:1,PK:1,CG:2,SHO:2,NH:5,PG:10}
+    batting:{H:.5,'1B':1,'2B':2,'3B':3,HR:4,R:2,RBI:2,BB:1,IBB:1,SO:-.25,HBP:1,SF:.5,SH:.5,GIDP:-.5,SB:2,CS:-1,GS:1,GWRBI:1},
+    pitching:{GS:0,QS:5,W:5,L:-5,SV:5,HLD:3,BS:-3,IP:3,ER:-.5,BB:-.5,HBP:-.5,BK:-.5,SO:1,PK:1,CG:2,SHO:2,NH:5,PG:10}
   };
   const sleep = ms => new Promise(r=>setTimeout(r,ms));
   const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
