@@ -24,6 +24,7 @@
     GS: 'Grand slams', GWRBI: 'Game-winning RBI',
   };
   const PIT_LABELS = {
+    GS: 'Games started', QS: 'Quality starts',
     W: 'Wins', L: 'Losses', SV: 'Saves', HLD: 'Holds', BS: 'Blown saves', IP: 'Innings pitched',
     ER: 'Earned runs', BB: 'Walks', IBB: 'Intentional walks', HBP: 'Hit batters', BK: 'Balks',
     SO: 'Strikeouts', PK: 'Pickoffs', CG: 'Complete games', SHO: 'Shutouts', NH: 'No-hitters', PG: 'Perfect games',
