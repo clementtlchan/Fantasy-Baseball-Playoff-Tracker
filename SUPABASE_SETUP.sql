@@ -29,3 +29,24 @@ drop policy if exists "admins can read own admin row" on public.league_admins;
 create policy "admins can read own admin row"
 on public.league_admins for select to authenticated
 using (user_id = auth.uid());
+
+create table if not exists public.game_records (
+  game_pk bigint primary key,
+  season integer not null,
+  record jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create or replace function public.touch_game_record() returns trigger language plpgsql as $$ begin new.updated_at=now(); return new; end; $$;
+drop trigger if exists game_record_touch on public.game_records;
+create trigger game_record_touch before update on public.game_records for each row execute function public.touch_game_record();
+alter table public.game_records enable row level security;
+drop policy if exists "public can read game records" on public.game_records;
+create policy "public can read game records" on public.game_records for select using (true);
+drop policy if exists "admins can insert game records" on public.game_records;
+create policy "admins can insert game records" on public.game_records for insert to authenticated
+with check (exists (select 1 from public.league_admins a where a.user_id=auth.uid()));
+drop policy if exists "admins can update game records" on public.game_records;
+create policy "admins can update game records" on public.game_records for update to authenticated
+using (exists (select 1 from public.league_admins a where a.user_id=auth.uid()))
+with check (exists (select 1 from public.league_admins a where a.user_id=auth.uid()));
