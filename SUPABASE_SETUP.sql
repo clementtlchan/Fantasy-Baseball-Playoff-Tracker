@@ -78,3 +78,25 @@ with check (exists (select 1 from public.league_admins a where a.user_id=auth.ui
 
 alter table public.player_eligibility
   add column if not exists source_version integer not null default 1;
+
+
+create table if not exists public.scoring_settings (
+  season integer primary key,
+  batting jsonb not null,
+  pitching jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create or replace function public.touch_scoring_settings() returns trigger language plpgsql as $$ begin new.updated_at=now(); return new; end; $$;
+drop trigger if exists scoring_settings_touch on public.scoring_settings;
+create trigger scoring_settings_touch before update on public.scoring_settings for each row execute function public.touch_scoring_settings();
+alter table public.scoring_settings enable row level security;
+drop policy if exists "public can read scoring settings" on public.scoring_settings;
+create policy "public can read scoring settings" on public.scoring_settings for select using (true);
+drop policy if exists "admins can insert scoring settings" on public.scoring_settings;
+create policy "admins can insert scoring settings" on public.scoring_settings for insert to authenticated
+with check (exists (select 1 from public.league_admins a where a.user_id=auth.uid()));
+drop policy if exists "admins can update scoring settings" on public.scoring_settings;
+create policy "admins can update scoring settings" on public.scoring_settings for update to authenticated
+using (exists (select 1 from public.league_admins a where a.user_id=auth.uid()))
+with check (exists (select 1 from public.league_admins a where a.user_id=auth.uid()));
