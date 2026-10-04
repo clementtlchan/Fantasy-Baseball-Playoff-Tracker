@@ -150,7 +150,9 @@
     const out = players.list.filter((p) => {
       const positions = Array.isArray(p.positions) && p.positions.length ? p.positions.map(x=>String(x).toUpperCase()) : String(p.pos||'').toUpperCase().split('/').filter(Boolean);
       if (filter === 'available') return !p.ownerTeam;
-      if (filter !== 'all') return positions.includes(filter.toUpperCase());
+      if (filter === 'batters') return positions.some(pos => pos !== 'SP' && pos !== 'RP');
+      if (filter === 'sp') return positions.includes('SP');
+      if (filter === 'rp') return positions.includes('RP');
       return true;
     });
     const dir = players.dir === 'asc' ? 1 : -1;
